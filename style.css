@@ -1,0 +1,34 @@
+body {
+    background-color: #222;
+    color: white;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    margin: 0;
+    font-family: sans-serif;
+}
+
+#grid {
+    display: grid;
+    /* Creiamo una griglia 10x10 */
+    grid-template-columns: repeat(10, 30px);
+    grid-template-rows: repeat(10, 30px);
+    border: 2px solid #fff;
+}
+
+.cell {
+    width: 30px;
+    height: 30px;
+}
+
+.wall { background-color: blue; }
+.dot { 
+    background-color: black; 
+    border-radius: 50%; 
+    border: 12px solid black; 
+    box-shadow: inset 0 0 0 2px white; 
+}
+.empty { background-color: black; }
+.pacman { background-color: yellow; border-radius: 50%; }
+.ghost { background-color: red; border-radius: 8px 8px 0 0; }
