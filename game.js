@@ -1,103 +1,171 @@
-const canvas = document.getElementById("gameCanvas");
-const ctx = canvas.getContext("2d");
-const scoreElement = document.getElementById("score");
+const canvas    = document.getElementById("gameCanvas");
+const ctx       = canvas.getContext("2d");
+const scoreEl   = document.getElementById("score");
+const levelEl   = document.getElementById("level");
+const livesEl   = document.getElementById("lives");
+const messageEl = document.getElementById("message");
 
+//Stato globale 
 let currentMapIdx = 0;
-let score = 0;
-let map;
-let pacman;
-let ghosts;
+let score         = 0;
+let lives         = 3;
+let map, pacman, ghosts;
+let gameOver      = false;
 
-// Funzione per inizializzare o resettare il livello
+// Animazione bocca
+let mouthAngle = 0.25;
+let mouthDir   = 1;
+
+// Helper
+function isWalkable(map, x, y) {
+  return map[y] !== undefined
+      && map[y][x] !== undefined
+      && map[y][x] !== 1;
+}
+
+function countDots() {
+  let n = 0;
+  for (const row of map) for (const cell of row) if (cell === 0) n++;
+  return n;
+}
+
+//  Inizializzazione livello 
 function initLevel() {
-    // Clona la mappa originale
-    map = JSON.parse(JSON.stringify(MAPS[currentMapIdx]));
-    
-    // Adatta il Canvas alla nuova mappa
-    canvas.width = map[0].length * TILE_SIZE;
-    canvas.height = map.length * TILE_SIZE;
-    
-    // Posiziona Pac-Man (sempre a 1,1)
-    pacman = new Pacman(1, 1);
-    
-    // Posiziona i 2 fantasmi in angoli lontani in base alla mappa
-    const maxY = map.length - 2;
-    const maxX = map[0].length - 2;
-    ghosts = [
-        new Ghost(maxX, 1, "red"),     // Angolo alto a destra
-        new Ghost(maxX, maxY, "cyan")   // Angolo basso a destra
-    ];
-    
-    draw(); // Primo disegno 
+  gameOver = false;
+  map = JSON.parse(JSON.stringify(MAPS[currentMapIdx]));
+
+  canvas.width  = map[0].length * TILE;
+  canvas.height = map.length    * TILE;
+
+  pacman = new Pacman(1, 1);
+
+  const maxY = map.length    - 2;
+  const maxX = map[0].length - 2;
+  ghosts = [
+    new Ghost(maxX, 1,    GHOST_COLORS[0]),  // alto destra   – rosso
+    new Ghost(maxX, maxY, GHOST_COLORS[1]),  // basso destra  – cyan
+    new Ghost(1,    maxY, GHOST_COLORS[2]),  // basso sinistra – rosa
+  ];
+
+  levelEl.textContent   = currentMapIdx + 1;
+  messageEl.textContent = "";
+  draw();
+}
+
+// Disegno
+function drawMap() {
+  for (let y = 0; y < map.length; y++) {
+    for (let x = 0; x < map[y].length; x++) {
+      const cell = map[y][x];
+      const px   = x * TILE;
+      const py   = y * TILE;
+
+      if (cell === 1) {
+        ctx.fillStyle = "#1919A6";
+        ctx.fillRect(px, py, TILE, TILE);
+        ctx.strokeStyle = "#3333CC";
+        ctx.lineWidth = 1;
+        ctx.strokeRect(px + 1, py + 1, TILE - 2, TILE - 2);
+      } else {
+        ctx.fillStyle = "#000";
+        ctx.fillRect(px, py, TILE, TILE);
+        if (cell === 0) {
+          ctx.fillStyle = "#FFE8C0";
+          ctx.beginPath();
+          ctx.arc(px + TILE / 2, py + TILE / 2, 3.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    }
+  }
 }
 
 function draw() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    
-    // Disegna Mappa
-    for(let y=0; y<map.length; y++) {
-        for(let x=0; x<map[y].length; x++) {
-            if(map[y][x] === 1) {
-                // Muri blu scuro
-                ctx.fillStyle = "#1919A6"; 
-                ctx.fillRect(x*TILE_SIZE, y*TILE_SIZE, TILE_SIZE, TILE_SIZE);
-            } else if(map[y][x] === 0) {
-                // Puntini bianchi piccoli
-                ctx.fillStyle = "white";
-                ctx.beginPath();
-                ctx.arc(x*TILE_SIZE + TILE_SIZE/2, y*TILE_SIZE + TILE_SIZE/2, 3, 0, Math.PI*2);
-                ctx.fill();
-            }
-        }
-    }
-
-    pacman.draw(ctx);
-    ghosts.forEach(g => g.draw(ctx));
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  drawMap();
+  ghosts.forEach(g => g.draw(ctx));
+  pacman.draw(ctx, mouthAngle);
 }
 
+// ── Loop principale
 function update() {
-    pacman.move(map);
-    
-    // Mangia puntini
-    if(map[pacman.y][pacman.x] === 0) {
-        map[pacman.y][pacman.x] = 2; // Spazio vuoto
-        score += 10;
-        scoreElement.innerText = score;
+  if (gameOver) return;
+
+  // Animazione bocca
+  mouthAngle += 0.04 * mouthDir;
+  if (mouthAngle >= 0.28) mouthDir = -1;
+  if (mouthAngle <= 0.02) mouthDir =  1;
+
+  // Muovi Pac-Man
+  pacman.tryMove(map);
+
+  // Mangia pallino
+  if (map[pacman.y][pacman.x] === 0) {
+    map[pacman.y][pacman.x] = 2;
+    score += 10;
+    scoreEl.textContent = score;
+  }
+
+  // Muovi fantasmi
+  ghosts.forEach(g => g.move(map));
+
+  // Collisione Pac-Man e fantasma
+  for (const g of ghosts) {
+    if (g.x === pacman.x && g.y === pacman.y) {
+      lives--;
+      livesEl.textContent = lives;
+      if (lives <= 0) {
+        gameOver = true;
+        messageEl.textContent = "GAME OVER!";
+        draw();
+        return;
+      }
+      messageEl.textContent = "AHI! −1 vita";
+      setTimeout(() => { messageEl.textContent = ""; }, 1200);
+      pacman = new Pacman(1, 1); // respawn
+      return;
     }
+  }
 
-    // Muovi fantasmi e controlla collisioni
-    ghosts.forEach(g => {
-        g.move(map);
-        // Collisione grossolana (stessa cella)
-        if(g.x === pacman.x && g.y === pacman.y) {
-            alert("GAME OVER! Punti: " + score);
-            score = 0;
-            scoreElement.innerText = score;
-            currentMapIdx = 0;
-            initLevel();
-        }
-    });
-
+  // Vittoria: tutti i pallini mangiati
+  if (countDots() === 0) {
+    messageEl.textContent = "LIVELLO COMPLETATO! ★";
+    gameOver = true;
     draw();
-}
+    setTimeout(nextLevel, 1800);
+    return;
+  }
 
-function nextLevel() {
-    currentMapIdx = (currentMapIdx + 1) % MAPS.length;
-    initLevel();
+  draw();
 }
-
 
 window.addEventListener("keydown", e => {
-    if(e.key === "ArrowUp")    pacman.dir = {x:0, y:-1};
-    if(e.key === "ArrowDown")  pacman.dir = {x:0, y:1};
-    if(e.key === "ArrowLeft")  pacman.dir = {x:-1, y:0};
-    if(e.key === "ArrowRight") pacman.dir = {x:1, y:0};
-    // Previene lo scroll della pagina con le frecce
-    if(["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].includes(e.key)) {
-        e.preventDefault();
-    }
+  const keyMap = {
+    ArrowUp:    { x:  0, y: -1 },
+    ArrowDown:  { x:  0, y:  1 },
+    ArrowLeft:  { x: -1, y:  0 },
+    ArrowRight: { x:  1, y:  0 },
+  };
+  if (keyMap[e.key]) {
+    pacman.nextDir = keyMap[e.key];
+    e.preventDefault();
+  }
 });
 
-// Avvia il gioco
+function nextLevel() {
+  currentMapIdx = (currentMapIdx + 1) % MAPS.length;
+  initLevel();
+}
+
+function resetGame() {
+  currentMapIdx = 0;
+  score = 0;
+  lives = 3;
+  scoreEl.textContent = score;
+  livesEl.textContent = lives;
+  initLevel();
+}
+
+// ── Avvio livello
 initLevel();
-setInterval(update, 150); // Leggermente più veloce
+setInterval(update, 130);
